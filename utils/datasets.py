@@ -124,7 +124,9 @@ def create_dataloader(path, imgsz, batch_size, stride, single_cls=False, hyp=Non
 
 class InfiniteDataLoader(dataloader.DataLoader):
     """ Dataloader that reuses workers
-
+        Dataloader takes a chunk of time at the start of every epoch to start worker processes.
+        We only need to initialize it once at epoch 1 through this InfiniteDataLoader class which subclasses the DataLoader class.
+        reference to: https://github.com/ultralytics/yolov5/pull/876
     Uses same syntax as vanilla DataLoader
     """
 

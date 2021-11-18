@@ -1,21 +1,12 @@
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
-# COCO 2017 dataset http://cocodataset.org
-# Example usage: python train.py --data coco.yaml
-# parent
-# ├── yolov5
-# └── datasets
-#     └── coco  ← downloads here
+path: ../datasets/coco
+train: train2017.txt
+val: val2017.txt
+test: test-dev2017.txt
 
-
-# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
-path: ../datasets/coco  # dataset root dir
-train: train2017.txt  # train images (relative to 'path') 118287 images
-val: val2017.txt  # train images (relative to 'path') 5000 images
-test: test-dev2017.txt  # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
-
-# Classes
-nc: 80  # number of classes
-names: ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+# 类别数量
+nc: 80
+# 类别名称
+names:  ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
         'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
         'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
         'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard',
@@ -25,8 +16,7 @@ names: ['person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 't
         'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear',
         'hair drier', 'toothbrush']  # class names
 
-
-# Download script/URL (optional)
+#  下载脚本/URL（可选）
 download: |
   from utils.general import download, Path
 
@@ -42,3 +32,20 @@ download: |
           'http://images.cocodataset.org/zips/val2017.zip',  # 1G, 5k images
           'http://images.cocodataset.org/zips/test2017.zip']  # 7G, 41k images (optional)
   download(urls, dir=dir / 'images', threads=3)
+
+
+#
+download2: |
+ from utils.general import download, Path
+ #  下载标签Labels
+ segments = False
+ dir = Path(yaml['path'])
+ url = 'https://github.com/ultralytics/yolov5/releases/download/v1.0/'
+ urls = [url + ('coco2017labels-segments.zip' if segments else 'coco2017labels.zip')]  # labels
+ download(urls, dir=dir.parent)
+
+ # 下载图像数据Data
+ urls = ['http://images.cocodataset.org/zips/train2017.zip',  # 19G, 118k images
+         'http://images.cocodataset.org/zips/val2017.zip',  # 1G, 5k images
+         'http://images.cocodataset.org/zips/test2017.zip']  # 7G, 41k images (optional)
+ download(urls, dir=dir / 'images', threads=3)
