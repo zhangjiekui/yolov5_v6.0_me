@@ -6,6 +6,7 @@ Usage:
     $ python path/to/train.py --data coco128.yaml --weights yolov5s.pt --img 640
 """
 import argparse
+import collections
 import math
 import os
 import random
@@ -273,10 +274,23 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         model.train()
 
         # Update image weights (optional, single-GPU only)
+        # if not opt.image_weights: #测试
         if opt.image_weights:
             cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
-            iw = labels_to_image_weights(dataset.labels, nc=nc, class_weights=cw)  # image weights
-            dataset.indices = random.choices(range(dataset.n), weights=iw, k=dataset.n)  # rand weighted idx
+            iw = labels_to_image_weights(dataset.labels, nc=nc, class_weights=cw,run_test=True)  # image weights
+
+            dataset.indices = random.choices(range(dataset.n), weights=iw, k=dataset.n)  # rand weighted idx 从集群中随机选取k次数据，返回一个列表，可以设置权重
+            # # 测试效果，是不是权重iw 与 indices中选择到的次数基本成正相关(也有随机性,测试的相关性系数在0.6上下)
+            # c = collections.Counter(dataset.indices)
+            # c_list = []
+            # for i in range(dataset.n):
+            #     times = c.get(i,0)
+            #     c_list.append(times)
+            #     # print(f"{i},{times=},{iw[i]=}")
+            #
+            # c_array = np.array(c_list)
+            # rho = np.corrcoef(c_array, iw) # Pearson相关系数
+            # print(rho[0,1])
 
         # Update mosaic border (optional)
         # b = int(random.uniform(0.25 * imgsz, 0.75 * imgsz + gs) // gs * gs)
@@ -441,7 +455,8 @@ def parse_opt(known=False):
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default=ROOT / 'yolov5s.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
-    parser.add_argument('--data', type=str, default=ROOT / 'data/coco_me.yaml', help='dataset.yaml path')
+    # parser.add_argument('--data', type=str, default=ROOT / 'data/coco_me.yaml', help='dataset.yaml path')
+    parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
     parser.add_argument('--hyp', type=str, default=ROOT / 'data/hyps/hyp.scratch.yaml', help='hyperparameters path')
     parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs, -1 for autobatch')
@@ -460,7 +475,7 @@ def parse_opt(known=False):
     parser.add_argument('--single-cls', action='store_true', help='train multi-class data as single-class')
     parser.add_argument('--adam', action='store_true', help='use torch.optim.Adam() optimizer')
     parser.add_argument('--sync-bn', action='store_true', help='use SyncBatchNorm, only available in DDP mode')
-    parser.add_argument('--workers', type=int, default=8, help='max dataloader workers (per RANK in DDP mode)')
+    parser.add_argument('--workers', type=int, default=0, help='max dataloader workers (per RANK in DDP mode)')
     parser.add_argument('--project', default=ROOT / 'runs/train', help='save to project/name')
     parser.add_argument('--name', default='exp', help='save to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
@@ -486,7 +501,7 @@ def main(opt, callbacks=Callbacks()):
     # Checks
     if RANK in [-1, 0]:
         print_args(FILE.stem, opt)
-        check_git_status()
+        # check_git_status()
         check_requirements(exclude=['thop'])
 
     # Resume

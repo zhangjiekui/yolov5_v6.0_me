@@ -7,13 +7,19 @@
 
 
 import threading
-import time
 import multiprocessing
 # multiprocessing.set_start_method('fork') #Windows下无法使用，需放到main函数下执行
-
-def task(name,i):
-    time.sleep(i)
+def thread_task(i,name="线程"):
     print(name,i)
+def process_task(i,name="进程"):
+    print(name,i)
+    t1 = threading.Thread(target=thread_task, args=(1,))
+    t2 = threading.Thread(target=thread_task, args=(2,))
+    t3 = threading.Thread(target=thread_task, args=[3])
+    t1.start()
+    t2.start()
+    t3.start()
+
 
 if __name__ == '__main__':
 
@@ -30,12 +36,8 @@ if __name__ == '__main__':
     实际使用中可以根据子进程具体做什么来选取用fork还是spawn~
 
     '''
-    d={'threading':threading.Thread,'multiprocessing':multiprocessing.Process}
-
-    for k,v in d.items():
-        print("========启动"+k)
-        for i in range(10):
-            # t = v(target=task, args=(k,i))
-            t = v(target=task, args=[k, i])
-            t.start()
+    p1=multiprocessing.Process(target=process_task(1,))
+    p1.start()
+    p2=multiprocessing.Process(target=process_task(2,))
+    p2.start()
     print("主程序已执行完最后一行！")

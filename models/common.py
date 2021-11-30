@@ -18,6 +18,7 @@ import torch
 import torch.nn as nn
 from PIL import Image
 from torch.cuda import amp
+from torch.nn.modules.module import T
 
 from utils.datasets import exif_transpose, letterbox
 from utils.general import (LOGGER, check_requirements, check_suffix, colorstr, increment_path, make_divisible,
@@ -69,6 +70,7 @@ class TransformerLayer(nn.Module):
         x = self.ma(self.q(x), self.k(x), self.v(x))[0] + x
         x = self.fc2(self.fc1(x)) + x
         return x
+
 
 
 class TransformerBlock(nn.Module):

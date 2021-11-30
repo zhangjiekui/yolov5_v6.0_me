@@ -42,17 +42,17 @@ os.environ['NUMEXPR_MAX_THREADS'] = str(min(os.cpu_count(), 8))  # NumExpr max t
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[1]  # YOLOv5 root directory
 
-
+# done!
 def set_logging(name=None, verbose=True):
     # Sets level and returns logger
     rank = int(os.getenv('RANK', -1))  # rank in world for Multi-GPU trainings
     logging.basicConfig(format="%(message)s", level=logging.INFO if (verbose and rank in (-1, 0)) else logging.WARNING)
     return logging.getLogger(name)
 
-
+# done!
 LOGGER = set_logging(__name__)  # define globally (used in train.py, val.py, detect.py, etc.)
 
-
+# done!
 class Profile(contextlib.ContextDecorator):
     # Usage: @Profile() decorator or 'with Profile():' context manager
     def __enter__(self):
@@ -61,7 +61,7 @@ class Profile(contextlib.ContextDecorator):
     def __exit__(self, type, value, traceback):
         print(f'Profile results: {time.time() - self.start:.5f}s')
 
-
+# done!
 class Timeout(contextlib.ContextDecorator):
     # Usage: @Timeout(seconds) decorator or 'with Timeout(seconds):' context manager
     def __init__(self, seconds, *, timeout_msg='', suppress_timeout_errors=True):
@@ -81,7 +81,7 @@ class Timeout(contextlib.ContextDecorator):
         if self.suppress and exc_type is TimeoutError:  # Suppress TimeoutError
             return True
 
-
+# done!
 class WorkingDirectory(contextlib.ContextDecorator):
     # Usage: @WorkingDirectory(dir) decorator or 'with WorkingDirectory(dir):' context manager
     def __init__(self, new_dir):
@@ -94,28 +94,30 @@ class WorkingDirectory(contextlib.ContextDecorator):
     def __exit__(self, exc_type, exc_val, exc_tb):
         os.chdir(self.cwd)
 
-
+# done!
+# todo revised!
 def try_except(func):
     # try-except function. Usage: @try_except decorator
     def handler(*args, **kwargs):
         try:
             func(*args, **kwargs)
+        #     return func(*args, **kwargs)
         except Exception as e:
             print(e)
 
     return handler
 
-
+# done!
 def methods(instance):
     # Get class/instance methods
     return [f for f in dir(instance) if callable(getattr(instance, f)) and not f.startswith("__")]
 
-
+# done!
 def print_args(name, opt):
     # Print argparser arguments
     LOGGER.info(colorstr(f'{name}: ') + ', '.join(f'{k}={v}' for k, v in vars(opt).items()))
 
-
+# done!
 def init_seeds(seed=0):
     # Initialize random number generator (RNG) seeds https://pytorch.org/docs/stable/notes/randomness.html
     # cudnn seed 0 settings are slower and more reproducible, else faster and less reproducible
@@ -125,18 +127,18 @@ def init_seeds(seed=0):
     torch.manual_seed(seed)
     cudnn.benchmark, cudnn.deterministic = (False, True) if seed == 0 else (True, False)
 
-
+# done!
 def intersect_dicts(da, db, exclude=()):
     # Dictionary intersection of matching keys and shapes, omitting 'exclude' keys, using da values
     return {k: v for k, v in da.items() if k in db and not any(x in k for x in exclude) and v.shape == db[k].shape}
 
-
+# done!
 def get_latest_run(search_dir='.'):
     # Return path to most recent 'last.pt' in /runs (i.e. to --resume from)
     last_list = glob.glob(f'{search_dir}/**/last*.pt', recursive=True)
     return max(last_list, key=os.path.getctime) if last_list else ''
 
-
+# done!
 def user_config_dir(dir='Ultralytics', env_var='YOLOV5_CONFIG_DIR'):
     # Return path of user configuration directory. Prefer environment variable if exists. Make dir if required.
     env = os.getenv(env_var)
@@ -149,7 +151,7 @@ def user_config_dir(dir='Ultralytics', env_var='YOLOV5_CONFIG_DIR'):
     path.mkdir(exist_ok=True)  # make if required
     return path
 
-
+# done!
 def is_writeable(dir, test=False):
     # Return True if directory has write permissions, test opening a file with write permissions if test=True
     if test:  # method 1
@@ -164,12 +166,12 @@ def is_writeable(dir, test=False):
     else:  # method 2
         return os.access(dir, os.R_OK)  # possible issues on Windows
 
-
+# done!
 def is_docker():
     # Is environment a Docker container?
     return Path('/workspace').exists()  # or Path('/.dockerenv').exists()
 
-
+# done!
 def is_colab():
     # Is environment a Google Colab instance?
     try:
@@ -178,28 +180,28 @@ def is_colab():
     except ImportError:
         return False
 
-
+# done!
 def is_pip():
     # Is file in a pip package?
     return 'site-packages' in Path(__file__).resolve().parts
 
-
+# done!
 def is_ascii(s=''):
     # Is string composed of all ASCII (no UTF) characters? (note str().isascii() introduced in python 3.7)
     s = str(s)  # convert list, tuple, None, etc. to str
     return len(s.encode().decode('ascii', 'ignore')) == len(s)
 
-
+# done!
 def is_chinese(s='人工智能'):
     # Is string composed of any Chinese characters?
     return re.search('[\u4e00-\u9fff]', s)
 
-
+# done!
 def emojis(str=''):
     # Return platform-dependent emoji-safe version of string
     return str.encode().decode('ascii', 'ignore') if platform.system() == 'Windows' else str
 
-
+# done!
 def file_size(path):
     # Return file/dir size (MB)
     path = Path(path)
@@ -210,7 +212,7 @@ def file_size(path):
     else:
         return 0.0
 
-
+# done!
 def check_online():
     # Check internet connectivity
     import socket
@@ -220,7 +222,7 @@ def check_online():
     except OSError:
         return False
 
-
+# done!
 @try_except
 @WorkingDirectory(ROOT)
 def check_git_status():
@@ -241,12 +243,12 @@ def check_git_status():
         s = f'up to date with {url} ✅'
     print(emojis(s))  # emoji-safe
 
-
+# done!
 def check_python(minimum='3.6.2'):
     # Check current python version vs. required python version
     check_version(platform.python_version(), minimum, name='Python ', hard=True)
 
-
+# done!
 def check_version(current='0.0.0', minimum='0.0.0', name='version ', pinned=False, hard=False):
     # Check version vs. required version
     current, minimum = (pkg.parse_version(x) for x in (current, minimum))
@@ -256,7 +258,7 @@ def check_version(current='0.0.0', minimum='0.0.0', name='version ', pinned=Fals
     else:
         return result
 
-
+# done!
 @try_except
 def check_requirements(requirements=ROOT / 'requirements.txt', exclude=(), install=True):
     # Check installed dependencies meet requirements (pass *.txt file or list of packages)
@@ -293,7 +295,7 @@ def check_requirements(requirements=ROOT / 'requirements.txt', exclude=(), insta
             f"{prefix} ⚠️ {colorstr('bold', 'Restart runtime or rerun command for updates to take effect')}\n"
         print(emojis(s))
 
-
+# done!
 def check_img_size(imgsz, s=32, floor=0):
     # Verify image size is a multiple of stride s in each dimension
     if isinstance(imgsz, int):  # integer i.e. img_size=640
@@ -304,12 +306,14 @@ def check_img_size(imgsz, s=32, floor=0):
         print(f'WARNING: --img-size {imgsz} must be multiple of max stride {s}, updating to {new_size}')
     return new_size
 
-
+# done!
 def check_imshow():
     # Check if environment supports image displays
     try:
         assert not is_docker(), 'cv2.imshow() is disabled in Docker environments'
         assert not is_colab(), 'cv2.imshow() is disabled in Google Colab environments'
+        # cv2.imshow('test', np.random.randint(0,255,(400, 400, 3), dtype=np.uint8))
+        # cv2.waitKey()
         cv2.imshow('test', np.zeros((1, 1, 3)))
         cv2.waitKey(1)
         cv2.destroyAllWindows()
@@ -319,7 +323,7 @@ def check_imshow():
         print(f'WARNING: Environment does not support cv2.imshow() or PIL Image.show() image displays\n{e}')
         return False
 
-
+# done!
 def check_suffix(file='yolov5s.pt', suffix=('.pt',), msg=''):
     # Check file(s) for acceptable suffix
     if file and suffix:
@@ -330,12 +334,12 @@ def check_suffix(file='yolov5s.pt', suffix=('.pt',), msg=''):
             if len(s):
                 assert s in suffix, f"{msg}{f} acceptable suffix is {suffix}"
 
-
+# done!
 def check_yaml(file, suffix=('.yaml', '.yml')):
     # Search/download YAML file (if necessary) and return path, checking suffix
     return check_file(file, suffix)
 
-
+# done!
 def check_file(file, suffix=''):
     # Search/download file (if necessary) and return path
     check_suffix(file, suffix)  # optional
@@ -360,7 +364,7 @@ def check_file(file, suffix=''):
         assert len(files) == 1, f"Multiple files match '{file}', specify exact path: {files}"  # assert unique
         return files[0]  # return file
 
-
+# done!
 def check_dataset(data, autodownload=True):
     # Download and/or unzip dataset if not found locally
     # Usage: https://github.com/ultralytics/yolov5/releases/download/v1.0/coco128_with_yaml.zip
@@ -412,14 +416,7 @@ def check_dataset(data, autodownload=True):
 
     return data  # dictionary
 
-
-def url2file(url):
-    # Convert URL to filename, i.e. https://url.com/file.txt?auth -> file.txt
-    url = str(Path(url)).replace(':/', '://')  # Pathlib turns :// -> :/
-    file = Path(urllib.parse.unquote(url)).name.split('?')[0]  # '%2F' to '/', split https://url.com/file.txt?auth
-    return file
-
-
+# done!
 def download(url, dir='.', unzip=True, delete=True, curl=False, threads=1):
     # Multi-threaded file download and unzip function, used in data.yaml for autodownload
     def download_one(url, dir):
@@ -453,22 +450,45 @@ def download(url, dir='.', unzip=True, delete=True, curl=False, threads=1):
         for u in [url] if isinstance(url, (str, Path)) else url:
             download_one(u, dir)
 
+# done!
+def url2file(url):
+    # Convert URL to filename, i.e. https://url.com/file.txt?auth -> file.txt
+    url = str(Path(url)).replace(':/', '://')  # Pathlib turns :// -> :/
+    file = Path(urllib.parse.unquote(url)).name.split('?')[0]  # '%2F' to '/', split https://url.com/file.txt?auth
+    # urllib.parse.unquote('%E6%B3%95%E5%9B%BD%E7%BA%A2%E9%85%92') ——> '法国红酒'
+    # urllib.parse.unquote('2F') ——> '/'
+    return file # 返回结果"file.txt"
 
+# done!
 def make_divisible(x, divisor):
     # Returns x evenly divisible by divisor
     return math.ceil(x / divisor) * divisor
 
-
+# done!
 def clean_str(s):
     # Cleans a string by replacing special characters with underscore _
     return re.sub(pattern="[|@#!¡·$€%&()=?¿^*;:,¨´><+]", repl="_", string=s)
 
-
+# done!
 def one_cycle(y1=0.0, y2=1.0, steps=100):
     # lambda function for sinusoidal ramp from y1 to y2 https://arxiv.org/pdf/1812.01187.pdf
+    """
+    # 从y1 到 y2 需要 100个 steps
+
+    调用方法:print(one_cycle()(5)) # 注意先one_cycle() 实例化再传入参数
+    测试方法：
+    x=range(300)
+    y1=list(map(one_cycle(steps=50),x))
+    y2 = list(map(one_cycle(), x))
+    plt.plot(x, y1, color='r',label= 'steps=50')
+    plt.plot(x, y2, color='b',label= 'steps=100')
+    plt.legend()
+    plt.show()
+    print(one_cycle()(5))
+    """
     return lambda x: ((1 - math.cos(x * math.pi / steps)) / 2) * (y2 - y1) + y1
 
-
+# done!
 def colorstr(*input):
     # Colors a string https://en.wikipedia.org/wiki/ANSI_escape_code, i.e.  colorstr('blue', 'hello world')
     *args, string = input if len(input) > 1 else ('blue', 'bold', input[0])  # color arguments, string
@@ -493,7 +513,7 @@ def colorstr(*input):
               'underline': '\033[4m'}
     return ''.join(colors[x] for x in args) + f'{string}' + colors['end']
 
-
+# done!
 def labels_to_class_weights(labels, nc=80):
     # Get class weights (inverse frequency) from training labels
     if labels[0] is None:  # no labels loaded
@@ -508,17 +528,63 @@ def labels_to_class_weights(labels, nc=80):
     # weights = np.hstack([gpi * len(labels)  - weights.sum() * 9, weights * 9]) ** 0.5  # prepend gridpoints to start
 
     weights[weights == 0] = 1  # replace empty bins with 1
+    # # 比较
+    # from collections import Counter
+    # c = Counter(classes)
+    # for i in range(nc):
+    #     ci=c.get(i,1)
+    #     wi=weights[i]
+    #     print(i,ci,wi)
+    #     assert ci==wi
+    # # 比较
+
+
     weights = 1 / weights  # number of targets per class
     weights /= weights.sum()  # normalize
     return torch.from_numpy(weights)
 
-
-def labels_to_image_weights(labels, nc=80, class_weights=np.ones(80)):
+# done!
+def labels_to_image_weights(labels, nc=80, class_weights=np.ones(80),run_test=False):
     # Produces image weights based on class_weights and image contents
     class_counts = np.array([np.bincount(x[:, 0].astype(np.int), minlength=nc) for x in labels])
     image_weights = (class_weights.reshape(1, nc) * class_counts).sum(1)
-    # index = random.choices(range(n), weights=image_weights, k=1)  # weight image sample
-    return image_weights
+
+    # todo: 有的图片权重为0，如coco128中对应的42，92 【np.argwhere(image_weights==0.0)】.经查询按名称排序的第43个文件（000000000250.txt）、第93个文件（000000000508.txt）均为空
+    # # 测试效果，是不是权重image_weights 与 对应类别 被选择到的次数基本成正相关(也有随机性,测试的相关性系数在0.6上下)
+    if run_test:
+        import collections
+        from scipy.special import softmax
+        num_images = len(image_weights)
+
+        image_weights_normalized = image_weights / image_weights.sum()
+        image_weights_softmax = softmax(image_weights)
+        image_weights_softmax_torch = torch.softmax(torch.as_tensor(image_weights),dim=-1)
+        # print(f"{image_weights.sum()=},{image_weights_normalized.sum()=},{image_weights_softmax.sum()=},{image_weights_softmax_torch.sum()=}")
+
+        for w in [image_weights_normalized,image_weights_softmax, image_weights_softmax_torch]:
+            for i in range(1):
+                index = random.choices(range(num_images), weights=w, k=num_images)  # weight image sample
+                c = collections.Counter(index)
+                c_list = []
+                for j in range(num_images):
+                    times = c.get(j,0)
+                    c_list.append(times)
+                    # if i==0:
+                    #     print(f"")
+                    #     print(f"{j=},{w[j]=},{times=}")
+
+                c_array = np.array(c_list)
+                rho = np.corrcoef(c_array, w) # Pearson相关系数
+                rho2 = np.corrcoef(c_array, image_weights)
+                print(f"                       {w[0:5]=}")
+                print(f"{image_weights_normalized[0:5]=}")
+                print("与自身比较",rho[0,1])
+                print("与原始比较",rho2[0, 1])
+            print("=========================================")
+    # return image_weights / image_weights.sum() # todo ：源代码中没有标准化，但经测试【train.py中 dataset.indices = random.choices(range(dataset.n), weights=iw, k=dataset.n)】，效果一样
+    return image_weights  #每张图片一个权重值
+
+
 
 
 def coco80_to_coco91_class():  # converts 80-index (val2014) to 91-index (paper)
@@ -839,3 +905,6 @@ def increment_path(path, exist_ok=False, sep='', mkdir=False):
 
 # Variables
 NCOLS = 0 if is_docker() else shutil.get_terminal_size().columns  # terminal window size
+if __name__ == '__main__':
+    print(cv2.__version__)
+    check_imshow()
