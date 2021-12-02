@@ -25,6 +25,7 @@ from torch.cuda import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import SGD, Adam, lr_scheduler
 from tqdm import tqdm
+from utils.torch_utils import profile
 
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
@@ -255,6 +256,9 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     model.hyp = hyp  # attach hyperparameters to model
     model.class_weights = labels_to_class_weights(dataset.labels, nc).to(device) * nc  # attach class weights
     model.names = names
+
+    # imgs =torch.randn((opt.batch_size,3,imgsz,imgsz))
+    # profile(imgs, model, device=device)
 
     # Start training
     t0 = time.time()

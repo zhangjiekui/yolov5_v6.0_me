@@ -19,7 +19,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from utils.general import LOGGER
-from utils.general import colorstr
+
 try:
     import thop  # for FLOPs computation
 except ImportError:
@@ -90,6 +90,7 @@ def time_sync():
         torch.cuda.synchronize()
     return time.time()
 
+
 def profile(input, ops, n=10, device=None):
     # YOLOv5 speed/memory/FLOPs profiler
     #
@@ -98,44 +99,29 @@ def profile(input, ops, n=10, device=None):
     #     m1 = lambda x: x * torch.sigmoid(x)
     #     m2 = nn.SiLU()
     #     profile(input, [m1, m2], n=100)  # profile over 100 iterations
-    ops = ops if isinstance(ops, list) else [ops]
-    print("")
-    print(colorstr(f'Proile Modles .....'))
+
     results = []
     device = device or select_device(logger_out=False)
-    print(f"{'ModuleName':>60s}{'Device':>10s}{'Params':>12s}{'GFLOPs':>12s}{'GPU_mem (GB)':>14s}{'forward (ms)':>14s}{'backward (ms)':>14s}"
-          f"{'input':>24s}{'output':>60s}")
+    print(f"{'Name':>20s}{'Params':>12s}{'GFLOPs':>12s}{'GPU_mem (GB)':>14s}{'forward (ms)':>14s}{'backward (ms)':>14s}"
+          f"{'input':>24s}{'output':>24s}")
 
     for x in input if isinstance(input, list) else [input]:
         x = x.to(device)
-        x.requires_grad_ = True
+        x.requires_grad = True
         for m in ops if isinstance(ops, list) else [ops]:
             m = m.to(device) if hasattr(m, 'to') else m  # device
             m = m.half() if hasattr(m, 'half') and isinstance(x, torch.Tensor) and x.dtype is torch.float16 else m
             tf, tb, t = 0, 0, [0, 0, 0]  # dt forward, backward
             try:
-                if hasattr(m, '__name__'):
-                    name = m.__name__
-                    _type = "Function"
-                    name = "".join(list(filter(str.isalnum, name)))
-                else:
-                    name = m.__class__
-                    name = str(name).split("\'")[1]
-                    _type = "Class"
-
-
-                # name = m.__name__ if hasattr(m, '__name__') else m.__class__
-                # _type = "Function" if hasattr(m, '__name__') else "Class"
-                #
-                # name = str(name).split("\'")[1]
-                # name = "".join(list(filter(str.isalnum, name)))
+                name = m.__name__ if hasattr(m, '__name__') else m.__class__
+                _type = "Function" if hasattr(m, '__name__') else "Class"
+                name = str(name).split(".")[-1]
+                name = "".join(list(filter(str.isalnum, name)))
                 name = f'{_type}({name})'
             except:
                 name = "Exception(Unknown)"
 
             try:
-                # FLOPs：注意s小写，是floating point operations的缩写（s表复数），
-                # 意指浮点运算数，理解为计算量。可以用来衡量算法 / 模型的复杂度
                 flops = thop.profile(m, inputs=(x,), verbose=False)[0] / 1E9 * 2  # GFLOPs
                 # flops = thop.profile(m, inputs=(x,), verbose=True)[0]   # GFLOPs
             except:
@@ -155,19 +141,16 @@ def profile(input, ops, n=10, device=None):
                     tf += (t[1] - t[0]) * 1000 / n  # ms per op forward
                     tb += (t[2] - t[1]) * 1000 / n  # ms per op backward
                 mem = torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0  # (GB)
-                # s_in = tuple(x.shape) if isinstance(x, torch.Tensor) else 'list'
-                # s_out = tuple(y.shape) if isinstance(y, torch.Tensor) else 'list'
-                s_in = tuple(x.shape) if isinstance(x, torch.Tensor) else 'list['+"|".join([str(tuple(e.shape)) for e in y])+"]"
-                s_out = tuple(y.shape) if isinstance(y, torch.Tensor) else 'list['+"|".join([str(tuple(e.shape)) for e in y])+"]"
+                s_in = tuple(x.shape) if isinstance(x, torch.Tensor) else 'list'
+                s_out = tuple(y.shape) if isinstance(y, torch.Tensor) else 'list'
                 p = sum(list(x.numel() for x in m.parameters())) if isinstance(m, nn.Module) else 0  # parameters
-                print(f'{name:>60s}{str(device):>10s}{p:12}{flops:12.4g}{mem:>14.3f}{tf:14.4g}{tb:14.4g}{str(s_in):>24s}{str(s_out):>70s}')
-                results.append([name, p, flops, mem, tf, tb, s_in, s_out, device])
+                print(f'{name:20}{p:12}{flops:12.4g}{mem:>14.3f}{tf:14.4g}{tb:14.4g}{str(s_in):>24s}{str(s_out):>24s}')
+                results.append([name, p, flops, mem, tf, tb, s_in, s_out])
             except Exception as e:
                 print(e)
                 results.append(None)
             torch.cuda.empty_cache()
     return results
-
 
 
 def is_parallel(model):
@@ -252,33 +235,16 @@ def model_info(model, verbose=False, img_size=640):
                   (i, name, p.requires_grad, p.numel(), list(p.shape), p.mean(), p.std()))
 
     try:  # FLOPs
-
-        # stride = max(int(model.stride.max()), 32) if hasattr(model, 'stride') else 32
-        # device = next(model.parameters()).device
-        # img = torch.zeros((1, model.yaml.get('ch', 3), stride, stride), device=device)  # input
-        device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-        img1 = torch.zeros((1, model.yaml.get('ch', 3), img_size, img_size), device=device)
-        img16 = torch.zeros((16, model.yaml.get('ch', 3), img_size, img_size), device=device)
-        # # [[name, p, flops, mem, tf, tb, s_in, s_out]]
-        # out = profile([img1,img16], deepcopy(model),  device=device)
-        # flops1_cpu  = out[0][2]  # stride GFLOPs
-        # flops16_cpu = out[1][2]   # stride GFLOPs
-        flops_gpu = profile([img1,img16], deepcopy(model),  device='cuda:0')  # stride GFLOPs
-        flops1_gpu  = flops_gpu[0][2]  # stride GFLOPs
-        flops16_gpu = flops_gpu[1][2]
-        # print(f"{flops1_gpu=},{flops16_gpu=}")
-        # print(f"{flops1_cpu=},{flops16_cpu=},{flops1_gpu=},{flops16_gpu=}")
-
-
-        # profile()
-        # flops2 = thop.profile(deepcopy(model), inputs=(img1,), verbose=False)[0] / 1E9 * 2  # stride GFLOPs
+        from thop import profile
+        stride = max(int(model.stride.max()), 32) if hasattr(model, 'stride') else 32
+        img = torch.zeros((1, model.yaml.get('ch', 3), stride, stride), device=next(model.parameters()).device)  # input
+        flops = profile(deepcopy(model), inputs=(img,), verbose=False)[0] / 1E9 * 2  # stride GFLOPs
         img_size = img_size if isinstance(img_size, list) else [img_size, img_size]  # expand if int/float
-        # fs = ', %.1f GFLOPs' % (flops1_gpu * img_size[0] / stride * img_size[1] / stride)  # 640x640 GFLOPs
-        fs = f"GFLOPs [batch_size(1) = {flops1_gpu:.1f}, batch_size(16) = {flops16_gpu:.1f}]"
+        fs = ', %.1f GFLOPs' % (flops * img_size[0] / stride * img_size[1] / stride)  # 640x640 GFLOPs
     except (ImportError, Exception):
-        fs = 'GFLOPs计算出错'
+        fs = ''
 
-    LOGGER.info(f"Model Summary: {len(list(model.modules()))} layers, {n_p} parameters, {n_g} gradients, {fs}")
+    LOGGER.info(f"Model Summary: {len(list(model.modules()))} layers, {n_p} parameters, {n_g} gradients{fs}")
 
 
 def scale_img(img, ratio=1.0, same_shape=False, gs=32):  # img(16,3,256,416)
@@ -361,6 +327,3 @@ class ModelEMA:
     def update_attr(self, model, include=(), exclude=('process_group', 'reducer')):
         # Update EMA attributes
         copy_attr(self.ema, model, include, exclude)
-
-if __name__ == '__main__':
-    model_info()
