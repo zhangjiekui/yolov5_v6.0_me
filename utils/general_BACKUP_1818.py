@@ -904,11 +904,7 @@ def increment_path(path, exist_ok=False, sep='', mkdir=False):
 
 
 # Variables
-<<<<<<< HEAD
-NCOLS = 0 if is_docker() else shutil.get_terminal_size().columns  # terminal window size
+
 if __name__ == '__main__':
     print(cv2.__version__)
-    check_imshow()
-=======
-NCOLS = 0 if is_docker() else shutil.get_terminal_size().columns  # terminal window size for tqdm
->>>>>>> a4207a202d6801df4586a8e044f60c496d94aeb4
+    print(check_imshow())

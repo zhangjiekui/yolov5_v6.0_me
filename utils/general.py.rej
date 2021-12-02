@@ -1,0 +1,22 @@
+diff a/utils/general.py b/utils/general.py	(rejected hunks)
+@@ -42,17 +42,17 @@
+ FILE = Path(__file__).resolve()
+ ROOT = FILE.parents[1]  # YOLOv5 root directory
+ 
+-# done!
++
+ def set_logging(name=None, verbose=True):
+     # Sets level and returns logger
+     rank = int(os.getenv('RANK', -1))  # rank in world for Multi-GPU trainings
+     logging.basicConfig(format="%(message)s", level=logging.INFO if (verbose and rank in (-1, 0)) else logging.WARNING)
+     return logging.getLogger(name)
+ 
+-# done!
++
+ LOGGER = set_logging(__name__)  # define globally (used in train.py, val.py, detect.py, etc.)
+ 
+-# done!
++
+ class Profile(contextlib.ContextDecorator):
+     # Usage: @Profile() decorator or 'with Profile():' context manager
+     def __enter__(self):

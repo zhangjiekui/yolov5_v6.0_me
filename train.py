@@ -275,12 +275,15 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         model.train()
 
         # Update image weights (optional, single-GPU only)
-        # if not opt.image_weights: #测试
-        if opt.image_weights:
-            cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
-            iw = labels_to_image_weights(dataset.labels, nc=nc, class_weights=cw,run_test=True)  # image weights
 
-            dataset.indices = random.choices(range(dataset.n), weights=iw, k=dataset.n)  # rand weighted idx 从集群中随机选取k次数据，返回一个列表，可以设置权重
+        if opt.image_weights:
+            # if not opt.image_weights: #测试
+            #     from utils.general_me import labels_to_image_weights #测试
+            cw = model.class_weights.cpu().numpy() * (1 - maps) ** 2 / nc  # class weights
+            iw = labels_to_image_weights(dataset.labels, nc=nc, class_weights=cw, run_test=True)  # image weights
+
+            dataset.indices = random.choices(range(dataset.n), weights=iw,
+                                             k=dataset.n)  # rand weighted idx 从集群中随机选取k次数据，返回一个列表，可以设置权重
             # # 测试效果，是不是权重iw 与 indices中选择到的次数基本成正相关(也有随机性,测试的相关性系数在0.6上下)
             # c = collections.Counter(dataset.indices)
             # c_list = []

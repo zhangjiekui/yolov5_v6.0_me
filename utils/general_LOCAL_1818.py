@@ -95,11 +95,13 @@ class WorkingDirectory(contextlib.ContextDecorator):
         os.chdir(self.cwd)
 
 # done!
+# todo revised!
 def try_except(func):
     # try-except function. Usage: @try_except decorator
     def handler(*args, **kwargs):
         try:
             func(*args, **kwargs)
+        #     return func(*args, **kwargs)
         except Exception as e:
             print(e)
 
@@ -310,6 +312,8 @@ def check_imshow():
     try:
         assert not is_docker(), 'cv2.imshow() is disabled in Docker environments'
         assert not is_colab(), 'cv2.imshow() is disabled in Google Colab environments'
+        # cv2.imshow('test', np.random.randint(0,255,(400, 400, 3), dtype=np.uint8))
+        # cv2.waitKey()
         cv2.imshow('test', np.zeros((1, 1, 3)))
         cv2.waitKey(1)
         cv2.destroyAllWindows()
@@ -413,13 +417,6 @@ def check_dataset(data, autodownload=True):
     return data  # dictionary
 
 # done!
-def url2file(url):
-    # Convert URL to filename, i.e. https://url.com/file.txt?auth -> file.txt
-    url = str(Path(url)).replace(':/', '://')  # Pathlib turns :// -> :/
-    file = Path(urllib.parse.unquote(url)).name.split('?')[0]  # '%2F' to '/', split https://url.com/file.txt?auth
-    return file
-
-# done!
 def download(url, dir='.', unzip=True, delete=True, curl=False, threads=1):
     # Multi-threaded file download and unzip function, used in data.yaml for autodownload
     def download_one(url, dir):
@@ -454,6 +451,15 @@ def download(url, dir='.', unzip=True, delete=True, curl=False, threads=1):
             download_one(u, dir)
 
 # done!
+def url2file(url):
+    # Convert URL to filename, i.e. https://url.com/file.txt?auth -> file.txt
+    url = str(Path(url)).replace(':/', '://')  # Pathlib turns :// -> :/
+    file = Path(urllib.parse.unquote(url)).name.split('?')[0]  # '%2F' to '/', split https://url.com/file.txt?auth
+    # urllib.parse.unquote('%E6%B3%95%E5%9B%BD%E7%BA%A2%E9%85%92') ——> '法国红酒'
+    # urllib.parse.unquote('2F') ——> '/'
+    return file # 返回结果"file.txt"
+
+# done!
 def make_divisible(x, divisor):
     # Returns x evenly divisible by divisor
     return math.ceil(x / divisor) * divisor
@@ -466,6 +472,20 @@ def clean_str(s):
 # done!
 def one_cycle(y1=0.0, y2=1.0, steps=100):
     # lambda function for sinusoidal ramp from y1 to y2 https://arxiv.org/pdf/1812.01187.pdf
+    """
+    # 从y1 到 y2 需要 100个 steps
+
+    调用方法:print(one_cycle()(5)) # 注意先one_cycle() 实例化再传入参数
+    测试方法：
+    x=range(300)
+    y1=list(map(one_cycle(steps=50),x))
+    y2 = list(map(one_cycle(), x))
+    plt.plot(x, y1, color='r',label= 'steps=50')
+    plt.plot(x, y2, color='b',label= 'steps=100')
+    plt.legend()
+    plt.show()
+    print(one_cycle()(5))
+    """
     return lambda x: ((1 - math.cos(x * math.pi / steps)) / 2) * (y2 - y1) + y1
 
 # done!
@@ -508,19 +528,65 @@ def labels_to_class_weights(labels, nc=80):
     # weights = np.hstack([gpi * len(labels)  - weights.sum() * 9, weights * 9]) ** 0.5  # prepend gridpoints to start
 
     weights[weights == 0] = 1  # replace empty bins with 1
+    # # 比较
+    # from collections import Counter
+    # c = Counter(classes)
+    # for i in range(nc):
+    #     ci=c.get(i,1)
+    #     wi=weights[i]
+    #     print(i,ci,wi)
+    #     assert ci==wi
+    # # 比较
+
+
     weights = 1 / weights  # number of targets per class
     weights /= weights.sum()  # normalize
     return torch.from_numpy(weights)
 
 # done!
-def labels_to_image_weights(labels, nc=80, class_weights=np.ones(80)):
+def labels_to_image_weights(labels, nc=80, class_weights=np.ones(80),run_test=False):
     # Produces image weights based on class_weights and image contents
     class_counts = np.array([np.bincount(x[:, 0].astype(np.int), minlength=nc) for x in labels])
     image_weights = (class_weights.reshape(1, nc) * class_counts).sum(1)
-    # index = random.choices(range(n), weights=image_weights, k=1)  # weight image sample
-    return image_weights
 
-# done!
+    # todo: 有的图片权重为0，如coco128中对应的42，92 【np.argwhere(image_weights==0.0)】.经查询按名称排序的第43个文件（000000000250.txt）、第93个文件（000000000508.txt）均为空
+    # # 测试效果，是不是权重image_weights 与 对应类别 被选择到的次数基本成正相关(也有随机性,测试的相关性系数在0.6上下)
+    if run_test:
+        import collections
+        from scipy.special import softmax
+        num_images = len(image_weights)
+
+        image_weights_normalized = image_weights / image_weights.sum()
+        image_weights_softmax = softmax(image_weights)
+        image_weights_softmax_torch = torch.softmax(torch.as_tensor(image_weights),dim=-1)
+        # print(f"{image_weights.sum()=},{image_weights_normalized.sum()=},{image_weights_softmax.sum()=},{image_weights_softmax_torch.sum()=}")
+
+        for w in [image_weights_normalized,image_weights_softmax, image_weights_softmax_torch]:
+            for i in range(1):
+                index = random.choices(range(num_images), weights=w, k=num_images)  # weight image sample
+                c = collections.Counter(index)
+                c_list = []
+                for j in range(num_images):
+                    times = c.get(j,0)
+                    c_list.append(times)
+                    # if i==0:
+                    #     print(f"")
+                    #     print(f"{j=},{w[j]=},{times=}")
+
+                c_array = np.array(c_list)
+                rho = np.corrcoef(c_array, w) # Pearson相关系数
+                rho2 = np.corrcoef(c_array, image_weights)
+                print(f"                       {w[0:5]=}")
+                print(f"{image_weights_normalized[0:5]=}")
+                print("与自身比较",rho[0,1])
+                print("与原始比较",rho2[0, 1])
+            print("=========================================")
+    # return image_weights / image_weights.sum() # todo ：源代码中没有标准化，但经测试【train.py中 dataset.indices = random.choices(range(dataset.n), weights=iw, k=dataset.n)】，效果一样
+    return image_weights  #每张图片一个权重值
+
+
+
+
 def coco80_to_coco91_class():  # converts 80-index (val2014) to 91-index (paper)
     # https://tech.amikelive.com/node-718/what-object-categories-labels-are-in-coco-dataset/
     # a = np.loadtxt('data/coco.names', dtype='str', delimiter='\n')
@@ -532,7 +598,7 @@ def coco80_to_coco91_class():  # converts 80-index (val2014) to 91-index (paper)
          64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90]
     return x
 
-# done!
+
 def xyxy2xywh(x):
     # Convert nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] where xy1=top-left, xy2=bottom-right
     y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
@@ -542,7 +608,7 @@ def xyxy2xywh(x):
     y[:, 3] = x[:, 3] - x[:, 1]  # height
     return y
 
-# done!
+
 def xywh2xyxy(x):
     # Convert nx4 boxes from [x, y, w, h] to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
     y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
@@ -552,7 +618,7 @@ def xywh2xyxy(x):
     y[:, 3] = x[:, 1] + x[:, 3] / 2  # bottom right y
     return y
 
-# done!
+
 def xywhn2xyxy(x, w=640, h=640, padw=0, padh=0):
     # Convert nx4 boxes from [x, y, w, h] normalized to [x1, y1, x2, y2] where xy1=top-left, xy2=bottom-right
     y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
@@ -562,7 +628,7 @@ def xywhn2xyxy(x, w=640, h=640, padw=0, padh=0):
     y[:, 3] = h * (x[:, 1] + x[:, 3] / 2) + padh  # bottom right y
     return y
 
-# done!
+
 def xyxy2xywhn(x, w=640, h=640, clip=False, eps=0.0):
     # Convert nx4 boxes from [x1, y1, x2, y2] to [x, y, w, h] normalized where xy1=top-left, xy2=bottom-right
     if clip:
@@ -574,7 +640,7 @@ def xyxy2xywhn(x, w=640, h=640, clip=False, eps=0.0):
     y[:, 3] = (x[:, 3] - x[:, 1]) / h  # height
     return y
 
-# done!
+
 def xyn2xy(x, w=640, h=640, padw=0, padh=0):
     # Convert normalized segments into pixel segments, shape (n,2)
     y = x.clone() if isinstance(x, torch.Tensor) else np.copy(x)
@@ -730,10 +796,9 @@ def non_max_suppression(prediction, conf_thres=0.25, iou_thres=0.45, classes=Non
 
     return output
 
-# done!
+
 def strip_optimizer(f='best.pt', s=''):  # from utils.general import *; strip_optimizer()
     # Strip optimizer from 'f' to finalize training, optionally save as 's'
-    mb_o = os.path.getsize(f) / 1E6  # todo
     x = torch.load(f, map_location=torch.device('cpu'))
     if x.get('ema'):
         x['model'] = x['ema']  # replace model with ema
@@ -745,7 +810,7 @@ def strip_optimizer(f='best.pt', s=''):  # from utils.general import *; strip_op
         p.requires_grad = False
     torch.save(x, s or f)
     mb = os.path.getsize(s or f) / 1E6  # filesize
-    print(f"Optimizer stripped from {f},{mb_o:.1f}MB;{(' saved as %s,' % s) if s else ''} {mb:.1f}MB") # todo
+    print(f"Optimizer stripped from {f},{(' saved as %s,' % s) if s else ''} {mb:.1f}MB")
 
 
 def print_mutation(results, hyp, save_dir, bucket):
@@ -778,7 +843,7 @@ def print_mutation(results, hyp, save_dir, bucket):
         i = np.argmax(fitness(data.values[:, :7]))  #
         f.write('# YOLOv5 Hyperparameter Evolution Results\n' +
                 f'# Best generation: {i}\n' +
-                f'# Last generation: {len(data) - 1}\n' +
+                f'# Last generation: {len(data)}\n' +
                 '# ' + ', '.join(f'{x.strip():>20s}' for x in keys[:7]) + '\n' +
                 '# ' + ', '.join(f'{x:>20.5g}' for x in data.values[i, :7]) + '\n\n')
         yaml.safe_dump(hyp, f, sort_keys=False)
@@ -839,4 +904,7 @@ def increment_path(path, exist_ok=False, sep='', mkdir=False):
 
 
 # Variables
-NCOLS = 0 if is_docker() else shutil.get_terminal_size().columns  # terminal window size for tqdm
+NCOLS = 0 if is_docker() else shutil.get_terminal_size().columns  # terminal window size
+if __name__ == '__main__':
+    print(cv2.__version__)
+    check_imshow()

@@ -72,14 +72,14 @@ def type_holder(a,b,c,d) -> object:
 
 
 if __name__ == '__main__':
-    import this
-    a = [1, 2]
-    b = [3, 4]
-    c = [5, 6]
-    d=sum((a, b, c), [])
-    print(d)
-    e=sum([a, b, c], [])
-    print(e)
+    # import this
+    # a = [1, 2]
+    # b = [3, 4]
+    # c = [5, 6]
+    # d=sum((a, b, c), [])
+    # print(d)
+    # e=sum([a, b, c], [])
+    # print(e)
 
     # print(general_me.__name__,)
     # profile_test()
@@ -156,7 +156,7 @@ if __name__ == '__main__':
 
     # path = user_config_dir()
     # print(path)
-    files=search_files_by_extension(search_dir=r'D:\GitSourceTreeCodebase\yolov5', extension='py')
+    # files=search_files_by_extension(search_dir=r'D:\GitSourceTreeCodebase\yolov5', extension='py')
     # print(files)
     #
     # s="YOLOv5 🚀 by Ultralytics, GPL - 3.0 license"
@@ -168,13 +168,32 @@ if __name__ == '__main__':
     # check_dataset(data, autodownload=True)
     # url2file()
     # make_divisible()
-    x=range(300)
-    y1=list(map(one_cycle(steps=50),x))
-    y2 = list(map(one_cycle(steps=100), x))
-    plt.plot(x, y1, color='r',label= 'steps=50')
-    plt.plot(x, y2, color='b',label= 'steps=100')
-    plt.legend()
-    plt.show()
-    print(one_cycle()(5))
+    # x=range(300)
+    # y1=list(map(one_cycle(steps=50),x))
+    # y2 = list(map(one_cycle(steps=100), x))
+    # plt.plot(x, y1, color='r',label= 'steps=50')
+    # plt.plot(x, y2, color='b',label= 'steps=100')
+    # plt.legend()
+    # plt.show()
+    # print(one_cycle()(5))
+    # coco80_to_coco91_class()
+
+    # a1np=np.array([1,2,3,4])
+    # a2np=np.array([[1,2,3,4],[5,6,7,8]])
+    # b1torch=torch.as_tensor(a1np)
+    # b2torch = torch.as_tensor(a2np)
+    # for e in [a1np,a2np,b1torch,b2torch]:
+    #     # print(e)
+    #     a=xyxy2xywh(e)
+    #     # print(a)
+    #     e2 = xywh2xyxy(a)
+    #
+    #     print("=============")
+    #     print(e)
+    #     print(e2)
+    #     print("=============")
+
+    strip_optimizer(f=r'D:\GitSourceTreeCodebase\yolov5\runs\train\exp60\weights\best.pt', s=r'D:\GitSourceTreeCodebase\yolov5\runs\train\exp60\weights\best2.pt')
+
 
 
