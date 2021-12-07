@@ -273,15 +273,18 @@ class ComputeLoss:
             # 0.00000, -0.50000
         print('')
         print("####开始特征图匹配........")
+        strides =torch.tensor([8, 16, 32])
         for i in range(self.nl): # 输出3个尺度的特征图
+            stride = strides[i]
             anchors = self.anchors[i] # 对应尺度特征图上预设的3个anchors
             gain[2:6] = torch.tensor(p[i].shape)[[3, 2, 3, 2]]  # xyxy gain ##Such as [80,80,80,80]
             # gain的值变为[ 1.,  1., 80., 80., 80., 80.,  1.]
             # Match targets to anchors
             t = targets * gain
-            print(f"----第{i}个输出特征图，targets共{targets.shape[1]=}个，每个target跟{na=}个anchor匹配，共有{targets.shape[1]*na=}个")
+            print(f"----第{i}个输出特征图（{p[i].shape}），targets共{targets.shape[1]=}个，每个target跟{na=}个anchor匹配，共有{targets.shape[1]*na=}个")
                 # targetS[0][0]的值为 [ 0.00000, 45.00000,  0.17721,  0.60102,  0.35441,  0.34919,  0.00000]
                 # t[0][0]      的值为 [ 0.00000, 45.00000, 14.17645, 48.08151, 28.35291, 27.93507,  0.00000]
+
             if nt:  # num targets
                 # Matches
                 r = t[:, :, 4:6] / anchors[:,None]
@@ -292,7 +295,8 @@ class ComputeLoss:
                 # j = wh_iou(anchors, t[:, 4:6]) > model.hyp['iou_t']  # iou(3,n)=wh_iou(anchors(3,2), gwh(n,2))
                 t = t[j]  # filter  ##t.shape[na,nt,7],j.shape[na,nt], t= t[j]后的shape[nt_keeped,7]
                 _num_targets=len(t)
-                print(f"............根据长宽比匹配后，还剩{_num_targets=}个输出特征图")
+                print(f"............targets与anchors（{anchors.tolist()}）根据长宽比匹配后，还剩{_num_targets=}个输出特征图")
+                print(f"............anchor还原：乘以stride={stride.item()}，结果为：{(anchors*stride).tolist()=}")
                 # 得到了保留下来的target。shape为[nt_keeped,7]
                 # nt_keeped可以大于nt(number of targets=targets.shape[0])
                 # 每个scale特征图上，每个cell预设3个anchors，存在一个target匹配多个Anchor的情况，如
