@@ -91,68 +91,6 @@ def time_sync():
     return time.time()
 
 
-def profile(input, ops, n=10, device=None):
-    # YOLOv5 speed/memory/FLOPs profiler
-    #
-    # Usage:
-    #     input = torch.randn(16, 3, 640, 640)
-    #     m1 = lambda x: x * torch.sigmoid(x)
-    #     m2 = nn.SiLU()
-    #     profile(input, [m1, m2], n=100)  # profile over 100 iterations
-
-    results = []
-    device = device or select_device(logger_out=False)
-    print(f"{'Name':>20s}{'Params':>12s}{'GFLOPs':>12s}{'GPU_mem (GB)':>14s}{'forward (ms)':>14s}{'backward (ms)':>14s}"
-          f"{'input':>24s}{'output':>24s}")
-
-    for x in input if isinstance(input, list) else [input]:
-        x = x.to(device)
-        x.requires_grad = True
-        for m in ops if isinstance(ops, list) else [ops]:
-            m = m.to(device) if hasattr(m, 'to') else m  # device
-            m = m.half() if hasattr(m, 'half') and isinstance(x, torch.Tensor) and x.dtype is torch.float16 else m
-            tf, tb, t = 0, 0, [0, 0, 0]  # dt forward, backward
-            try:
-                name = m.__name__ if hasattr(m, '__name__') else m.__class__
-                _type = "Function" if hasattr(m, '__name__') else "Class"
-                name = str(name).split(".")[-1]
-                name = "".join(list(filter(str.isalnum, name)))
-                name = f'{_type}({name})'
-            except:
-                name = "Exception(Unknown)"
-
-            try:
-                flops = thop.profile(m, inputs=(x,), verbose=False)[0] / 1E9 * 2  # GFLOPs
-                # flops = thop.profile(m, inputs=(x,), verbose=True)[0]   # GFLOPs
-            except:
-                flops = 0
-
-            try:
-                for _ in range(n):
-                    t[0] = time_sync()
-                    y = m(x)
-                    t[1] = time_sync()
-                    try:
-                        _ = (sum(yi.sum() for yi in y) if isinstance(y, list) else y).sum().backward()
-                        t[2] = time_sync()
-                    except Exception as e:  # no backward method
-                        # print(e)  # for debug
-                        t[2] = float('nan')
-                    tf += (t[1] - t[0]) * 1000 / n  # ms per op forward
-                    tb += (t[2] - t[1]) * 1000 / n  # ms per op backward
-                mem = torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0  # (GB)
-                s_in = tuple(x.shape) if isinstance(x, torch.Tensor) else 'list'
-                s_out = tuple(y.shape) if isinstance(y, torch.Tensor) else 'list'
-                p = sum(list(x.numel() for x in m.parameters())) if isinstance(m, nn.Module) else 0  # parameters
-                print(f'{name:20}{p:12}{flops:12.4g}{mem:>14.3f}{tf:14.4g}{tb:14.4g}{str(s_in):>24s}{str(s_out):>24s}')
-                results.append([name, p, flops, mem, tf, tb, s_in, s_out])
-            except Exception as e:
-                print(e)
-                results.append(None)
-            torch.cuda.empty_cache()
-    return results
-
-
 def is_parallel(model):
     # Returns True if model is of type DP or DDP
     return type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
@@ -175,9 +113,33 @@ def initialize_weights(model):
             m.inplace = True
 
 
-def find_modules(model, mclass=nn.Conv2d):
+# list(model.named_modules(remove_duplicate=False))
+def find_modules(model, mclass=nn.Conv2d,remove_duplicate=True):
+    '''
+    测试用例见train.py
+    from utils.torch_utils import find_modules
+    ms = find_modules(model, mclass=models.yolo.Detect)
+    ms2 = find_modules(model, mclass=models.yolo.Detect,remove_duplicate=False)
+    :param model:
+    :param mclass:
+    :param remove_duplicate:
+    :return:
+    '''
     # Finds layer indices matching module class 'mclass'
-    return [i for i, m in enumerate(model.module_list) if isinstance(m, mclass)]
+    # return [i for i, m in enumerate(model.module_list) if isinstance(m, mclass)] #todo，该方法未曾调用过，而且没有model.module_list属性
+    all_layers = len(list(model.named_modules(remove_duplicate=False)))
+    all_layers_remove_duplicate=len(list(model.named_modules(remove_duplicate=True)))
+    module_idx_list = []
+    if remove_duplicate:
+        module_idx_list = [i for i, m in enumerate(model.modules()) if isinstance(m, mclass)]
+    else:
+        i = 0
+        all_named_modules_with_duplicated = model.named_modules(remove_duplicate=False) #generator
+        for _, module in all_named_modules_with_duplicated:
+            if isinstance(module, mclass):
+                module_idx_list.append(i)
+            i+=1
+    return all_layers,all_layers_remove_duplicate,module_idx_list
 
 
 def sparsity(model):

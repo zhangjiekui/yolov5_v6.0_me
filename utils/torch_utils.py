@@ -25,7 +25,93 @@ try:
 except ImportError:
     thop = None
 
+'''
+1. 定义一个上下文管理器类【参见general.py 中的 class Timeout(contextlib.ContextDecorator)】
+    class MyResource:
+        # __enter__ 返回的对象会被with语句中as后的变量接受
+        def __enter__(self):
+            print('connect to resource')
+            return self
+    
+        def __exit__(self, exc_type, exc_value, tb):
+            print('close resource conection')
+    
+        def query(self):
+            print('query data')
+        # 类中有两个特殊的魔术方法:
+        # __enter__: with语句中的代码块执行前, 会执行__enter__, 返回的值将赋值给with句中as后的变量.
+        # __exit__: with语句中的代码块执行结束或出错, 会执行_exit__
+        
+2. 使用contextmanager
+    from contextlib import contextmanager
+    class MyResource:
+        def query(self):
+            print('query data')
+    
+    @contextmanager
+    def make_myresource():
+        print('start to connect')
+        yield MyResource()
+        print('end connect')
+        pass         
+        
+3. 方法调用及结果
+        # with MyResource() as r:
+        #   r.query()
+        
+        # 调用结果
+        # connect to resource
+        # query data
+        # close resource conection
 
+4.@contextmanager还有另一个用法，与上下文管理器无关，先暂时称之为获取器吧。
+     def book_mark():#自动补全书名号
+        print("《", end='')
+        yield
+        print("》", end='')
+    
+    with book_mark():
+        print("生命中不能承受之轻", end='')
+5. yield 关键字，可以让函数执行到yield处【或返回MyResource()】之后会处于一个中断的状态，
+   在外面执行了print("生命中不能承受之轻", end='')【或MyResource()的r.query()】 之后，
+   再次回到 yield 这儿继续执行后面的代码。带有 yield 的函数又称作为生成器   
+'''
+'''完整代码实例
+def context_management_test():
+    import contextlib
+    from contextlib import contextmanager
+    class MyResource1: # 不一定要继承
+    # class MyResource1(contextlib.ContextDecorator):
+        # __enter__ 返回的对象会被with语句中as后的变量接受
+        def __enter__(self):
+            print('1 connect to resource')
+            return self
+
+        def __exit__(self, exc_type, exc_value, tb):
+            print('1 close resource conection')
+
+        def query(self):
+            print('1 query data')
+
+
+    class MyResource2(contextlib.ContextDecorator):
+        def query(self):
+            print('2 query data')
+
+    @contextmanager
+    def make_myresource():
+        print('2 start to connect')
+        yield MyResource2()
+        print('2 end connect')
+        pass
+
+    with MyResource1() as r:
+        r.query()
+    print("===========================")
+    with make_myresource() as r:
+        r.query()
+'''
+# done
 @contextmanager
 def torch_distributed_zero_first(local_rank: int):
     """
@@ -37,13 +123,12 @@ def torch_distributed_zero_first(local_rank: int):
     if local_rank == 0:
         dist.barrier(device_ids=[0])
 
-
 def date_modified(path=__file__):
     # return human-readable file modification date, i.e. '2021-3-26'
     t = datetime.datetime.fromtimestamp(Path(path).stat().st_mtime)
     return f'{t.year}-{t.month}-{t.day}'
 
-
+# done
 def git_describe(path=Path(__file__).parent):  # path must be a directory
     # return human-readable git description, i.e. v5.0-5-g3e25f1e https://git-scm.com/docs/git-describe
     s = f'git -C {path} describe --tags --long --always'
@@ -51,8 +136,7 @@ def git_describe(path=Path(__file__).parent):  # path must be a directory
         return subprocess.check_output(s, shell=True, stderr=subprocess.STDOUT).decode()[:-1]
     except subprocess.CalledProcessError as e:
         return ''  # not a git repository
-
-
+# done
 def select_device(device='', batch_size=None, newline=True,logger_out=True):
     # device = 'cpu' or '0' or '0,1,2,3'
     s = f'YOLOv5 🚀 {git_describe() or date_modified()} torch {torch.__version__} '  # string
@@ -83,13 +167,14 @@ def select_device(device='', batch_size=None, newline=True,logger_out=True):
         LOGGER.info(s.encode().decode('ascii', 'ignore') if platform.system() == 'Windows' else s)  # emoji-safe
     return torch.device('cuda:0' if cuda else 'cpu')
 
-
+# done
 def time_sync():
     # pytorch-accurate time
     if torch.cuda.is_available():
         torch.cuda.synchronize()
     return time.time()
 
+# done
 def profile(input, ops, n=10, device=None):
     # YOLOv5 speed/memory/FLOPs profiler
     #
@@ -161,25 +246,24 @@ def profile(input, ops, n=10, device=None):
                 s_out = tuple(y.shape) if isinstance(y, torch.Tensor) else 'list['+"|".join([str(tuple(e.shape)) for e in y])+"]"
                 p = sum(list(x.numel() for x in m.parameters())) if isinstance(m, nn.Module) else 0  # parameters
                 print(f'{name:>60s}{str(device):>10s}{p:12}{flops:12.4g}{mem:>14.3f}{tf:14.4g}{tb:14.4g}{str(s_in):>24s}{str(s_out):>70s}')
-                results.append([name, p, flops, mem, tf, tb, s_in, s_out, device])
+                results.append([p, flops, mem, tf, tb, s_in, s_out, device,name])
             except Exception as e:
                 print(e)
                 results.append(None)
             torch.cuda.empty_cache()
     return results
 
-
-
+# done
 def is_parallel(model):
     # Returns True if model is of type DP or DDP
     return type(model) in (nn.parallel.DataParallel, nn.parallel.DistributedDataParallel)
 
-
+# done
 def de_parallel(model):
     # De-parallelize a model: returns single-GPU model if model is of type DP or DDP
     return model.module if is_parallel(model) else model
 
-
+# done
 def initialize_weights(model):
     for m in model.modules():
         t = type(m)
@@ -190,33 +274,60 @@ def initialize_weights(model):
             m.momentum = 0.03
         elif t in [nn.Hardswish, nn.LeakyReLU, nn.ReLU, nn.ReLU6, nn.SiLU]:
             m.inplace = True
-
-
-def find_modules(model, mclass=nn.Conv2d):
+# done
+# list(model.named_modules(remove_duplicate=False))
+def find_modules(model, mclass=nn.Conv2d,remove_duplicate=True):
+    '''
+    测试用例见train.py
+    from utils.torch_utils import find_modules
+    ms = find_modules(model, mclass=models.yolo.Detect)
+    ms2 = find_modules(model, mclass=models.yolo.Detect,remove_duplicate=False)
+    :param model:
+    :param mclass:
+    :param remove_duplicate:
+    :return:
+    '''
     # Finds layer indices matching module class 'mclass'
-    return [i for i, m in enumerate(model.module_list) if isinstance(m, mclass)]
+    # return [i for i, m in enumerate(model.module_list) if isinstance(m, mclass)] #todo，该方法未曾调用过，而且没有model.module_list属性
+    all_layers = len(list(model.named_modules(remove_duplicate=False)))
+    all_layers_remove_duplicate=len(list(model.named_modules(remove_duplicate=True)))
+    module_idx_list = []
+    if remove_duplicate:
+        module_idx_list = [i for i, m in enumerate(model.modules()) if isinstance(m, mclass)]
+    else:
+        i = 0
+        all_named_modules_with_duplicated = model.named_modules(remove_duplicate=False) #generator
+        for _, module in all_named_modules_with_duplicated:
+            if isinstance(module, mclass):
+                module_idx_list.append(i)
+            i+=1
+    return module_idx_list,all_layers,all_layers_remove_duplicate
 
-
+# done
 def sparsity(model):
     # Return global model sparsity
     a, b = 0, 0
     for p in model.parameters():
         a += p.numel()
         b += (p == 0).sum()
-    return b / a
+    return b.item() / a
 
-
+# done
 def prune(model, amount=0.3):
     # Prune model to requested global sparsity
     import torch.nn.utils.prune as prune
     print('Pruning model... ', end='')
-    for name, m in model.named_modules():
+    print('current %.2f global sparsity' % sparsity(model))
+    for name, m in model.named_modules(remove_duplicate=False):
         if isinstance(m, nn.Conv2d):
+            # print("    正常：",m.state_dict().keys())
             prune.l1_unstructured(m, name='weight', amount=amount)  # prune
+            # print("    l1_unstructured:",m.state_dict().keys())
             prune.remove(m, 'weight')  # make permanent
-    print(' %.3g global sparsity' % sparsity(model))
+            # print("    remove:",m.state_dict().keys())
+    print('after pruned %.3g global sparsity' % sparsity(model))
 
-
+# to be done
 def fuse_conv_and_bn(conv, bn):
     # Fuse convolution and batchnorm layers https://tehnokv.com/posts/fusing-batchnorm-and-conv/
     fusedconv = nn.Conv2d(conv.in_channels,
@@ -361,6 +472,44 @@ class ModelEMA:
     def update_attr(self, model, include=(), exclude=('process_group', 'reducer')):
         # Update EMA attributes
         copy_attr(self.ema, model, include, exclude)
+def model_named_params_statedict(model):
+    for name,param in model.named_parameters():
+        splits=name.split('.')
+        _name=''
+        for s in splits:
+            try:
+                ints=int(s)
+                _s=f'[{ints}]'
+                # _name+=_s
+            except:
+                _s=s if len(_name)==0 else '.'+s
+                # _name+=_s
+            _name+=_s
+        # compare = id(eval("model."+_name))==id(param)
+        # assert (param.data != model.model.state_dict()[name.replace('model.', '')]).sum()==0
+        # # 值相同，但id不一样
+        # id_compare=id(param.data) == id(model.model.state_dict()[name.replace('model.', '')])
+        # print(f'{id_compare=}')
+        # # print(name,_name,compare)
+        # assert id(eval("model."+_name))==id(param)
+    # print('over')
+
+def test_fucs(model):
+    import models
+    # from utils.torch_utils import find_modules, is_parallel
+    # print(is_parallel(model))
+    # ms1 = find_modules(model, mclass=models.yolo.Detect)
+    # ms2 = find_modules(model, mclass=models.yolo.Detect, remove_duplicate=False)
+    # ms3 = find_modules(model, mclass=nn.Conv2d)
+    # ms4 = find_modules(model, mclass=nn.Conv2d, remove_duplicate=False)
+    # return ms1, ms2, ms3, ms4
+    # sparsity_ration = sparsity(model)
+    prune(model)
+
+    model_named_params_statedict(model)
+
+
+
 
 if __name__ == '__main__':
     model_info()

@@ -11,6 +11,8 @@ import yaml
 from tqdm import tqdm
 
 from utils.general import LOGGER, colorstr, emojis
+from pathlib import Path
+from utils.general import WorkingDirectory
 
 PREFIX = colorstr('AutoAnchor: ')
 
@@ -61,7 +63,7 @@ def check_anchors(dataset, model, thr=4.0, imgsz=640):
         else:
             LOGGER.info(f'{PREFIX}Original anchors better than new anchors. Proceeding with original anchors.')
 
-
+@WorkingDirectory(r'../datasets/coco128_with_yaml')
 def kmean_anchors(dataset='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=1000, verbose=True):
     """ Creates kmeans-evolved anchors from training dataset
 
@@ -107,10 +109,17 @@ def kmean_anchors(dataset='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen
         return k
 
     if isinstance(dataset, str):  # *.yaml file
+        dataset = Path(dataset).absolute()
+        assert dataset.exists(), dataset
+        # print(dataset)
+
         with open(dataset, errors='ignore') as f:
             data_dict = yaml.safe_load(f)  # model dict
         from utils.datasets import LoadImagesAndLabels
-        dataset = LoadImagesAndLabels(data_dict['train'], augment=True, rect=True)
+
+        dataset_path = Path(data_dict['train']).absolute()
+        assert dataset_path.exists(), dataset_path
+        dataset = LoadImagesAndLabels(dataset_path, augment=True, rect=True)
 
     # Get label wh
     shapes = img_size * dataset.shapes / dataset.shapes.max(1, keepdims=True)
@@ -162,3 +171,6 @@ def kmean_anchors(dataset='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen
                 print_results(k, verbose)
 
     return print_results(k)
+
+if __name__ == '__main__':
+    kmean_anchors(dataset=r'coco128.yaml')
