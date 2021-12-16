@@ -48,10 +48,11 @@ def autobatch(model, imgsz=640, fraction=0.9, batch_size=16):
         y = profile(img, model, n=3, device=device)
     except Exception as e:
         LOGGER.warning(f'{prefix}{e}')
-
-    y = [x[2] for x in y if x]  # memory [2]
+    y = [x[2] for x in y if x]  #todo memory [2]
+    # y = [x[4] for x in y if x]  # memory [2]
     batch_sizes = batch_sizes[:len(y)]
     p = np.polyfit(batch_sizes, y, deg=1)  # first degree polynomial fit
     b = int((f * fraction - p[1]) / p[0])  # y intercept (optimal batch size)
+    b = (b // 8) * 8  # todo 调整为8的倍数
     LOGGER.info(f'{prefix}Using batch-size {b} for {d} {t * fraction:.2f}G/{t:.2f}G ({fraction * 100:.0f}%)')
     return b

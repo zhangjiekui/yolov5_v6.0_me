@@ -1,6 +1,7 @@
 # YOLOv5 🚀 by Ultralytics, GPL-3.0 license
 """
 Activation functions
+【YOLOV5-5.x 源码解读】activations.py https://blog.csdn.net/qq_38253797/article/details/119030643
 """
 
 import torch
@@ -9,11 +10,44 @@ import torch.nn.functional as F
 
 
 # SiLU https://arxiv.org/pdf/1606.08415.pdf ----------------------------------------------------------------------------
-class SiLU(nn.Module):  # export-friendly version of nn.SiLU()
+# export-friendly version of nn.SiLU()
+# The SiLU function is also known as the swish function. 参见官方【https://pytorch.org/docs/stable/generated/torch.nn.SiLU.html】
+class SiLU(nn.Module):
+    """
+    export-friendly version of nn.SiLU()
+    """
     @staticmethod
     def forward(x):
+        # return x.mul_(torch.sigmoid(x))
         return x * torch.sigmoid(x)
+Swish = SiLU
 
+# https://blog.csdn.net/qq_38253797/article/details/119030643
+# https://github.com/lukemelas/EfficientNet-PyTorch/blob/master/efficientnet_pytorch/utils.py
+# https://github.com/ultralytics/yolov3/blob/3aa347a3212861293193a79866bfe3634143b517/utils/layers.py#L111
+# 模仿下面的MemoryEfficientMish写法
+class MemoryEfficientSiLU(nn.Module):
+    # 节省内存的Swish 不采用自动求导(自己写前向传播和反向传播) 更高效
+    class F(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, x):
+            # save_for_backward会保留x的全部信息(一个完整的外挂Autograd Function的Variable),
+            # 并提供避免in-place操作导致的input在backward被修改的情况.
+            # in-place操作指不通过中间变量计算的变量间的操作。
+            ctx.save_for_backward(x)
+            return x * torch.sigmoid(x)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            # 此处saved_tensors[0] 作用同上文 save_for_backward
+            x = ctx.saved_tensors[0]
+            sx = torch.sigmoid(x)
+            # 返回该激活函数求导之后的结果 求导过程见上文
+            return grad_output * (sx * (1 + x * (1 - sx)))
+
+    def forward(self, x): # 应用前向传播方法
+        return self.F.apply(x)
+MemoryEfficientSwish = MemoryEfficientSiLU
 
 class Hardswish(nn.Module):  # export-friendly version of nn.Hardswish()
     @staticmethod
@@ -99,3 +133,102 @@ class MetaAconC(nn.Module):
         beta = torch.sigmoid(self.fc2(self.fc1(y)))  # bug patch BN layers removed
         dpx = (self.p1 - self.p2) * x
         return dpx * torch.sigmoid(beta * dpx) + self.p2 * x
+
+
+'''
+作者通过实验得出以下几点发现：
+
+DyReLUB与DyReLUC更适合于图像分类任务；
+    DyReLUB与DyReLUC更适合于关键点检测的骨干网络，而DyReLUC更适合于关键点检测的head网络;
+    在图像分类方面，DyReLU在MobileNetV2的嵌入应用可以得到4.2% 的性能提升；
+    在关键点检测方面，DyReLU的应用可以得到3.5AP的性能提升。
+因为DyReLUC的运算量太大，DyReLUA的性能又没那么好，所以我们一般是用DyReLUB。
+————————————————
+版权声明：本文为CSDN博主「满船清梦压星河HK」的原创文章，遵循CC 4.0 BY-SA版权协议，转载请附上原文出处链接及本声明。
+原文链接：https://blog.csdn.net/qq_38253797/article/details/119007986
+'''
+class DyReLU(nn.Module):
+    def __init__(self, channels, reduction=4, k=2, conv_type='2d'):
+        super(DyReLU, self).__init__()
+        self.channels = channels
+        self.k = k
+        self.conv_type = conv_type
+        assert self.conv_type in ['1d', '2d']
+
+        self.fc1 = nn.Linear(channels, channels // reduction)
+        self.relu = nn.ReLU(inplace=True)
+        self.fc2 = nn.Linear(channels // reduction, 2*k)
+        self.sigmoid = nn.Sigmoid()
+
+        self.register_buffer('lambdas', torch.Tensor([1.]*k + [0.5]*k).float())
+        self.register_buffer('init_v', torch.Tensor([1.] + [0.]*(2*k - 1)).float())
+
+    def get_relu_coefs(self, x):
+        theta = torch.mean(x, dim=-1)
+        if self.conv_type == '2d':
+            theta = torch.mean(theta, dim=-1)
+        theta = self.fc1(theta)
+        theta = self.relu(theta)
+        theta = self.fc2(theta)
+        theta = 2 * self.sigmoid(theta) - 1
+        return theta
+
+    def forward(self, x):
+        raise NotImplementedError
+
+class _DyReLUA(DyReLU):
+    """
+    DyReLUA的性能一般，一般不采用
+    调用: self.relu = DyReLUA(64, conv_type='2d')   64=本层channels
+    """
+    def __init__(self, channels, reduction=4, k=2, conv_type='2d'):
+        super().__init__(channels, reduction, k, conv_type)
+        self.fc2 = nn.Linear(channels // reduction, 2*k)
+
+    def forward(self, x):
+        assert x.shape[1] == self.channels
+        theta = self.get_relu_coefs(x)  # 这里是执行到normalize
+        relu_coefs = theta.view(-1, 2*self.k) * self.lambdas + self.init_v  # 这里是执行完 theta(x)
+
+        # BxCxL -> LxCxBx1
+        x_perm = x.transpose(0, -1).unsqueeze(-1)
+        # a^k_c=relu_coefs[:, :self.k]    b^k_c=relu_coefs[:, self.k:]
+        # a^k_c(x) * x_c + b^k_c(x)
+        output = x_perm * relu_coefs[:, :self.k] + relu_coefs[:, self.k:]
+        # LxCxBx2 -> BxCxL
+        # y_c = max{a^k_c(x) * x_c + b^k_c(x)}
+        result = torch.max(output, dim=-1)[0].transpose(0, -1)
+
+        return result
+
+class DyReLUB(DyReLU):
+    """
+    调用: self.relu = DyReLUB(64, conv_type='2d')   64=本层channels
+    """
+    def __init__(self, channels, reduction=4, k=2, conv_type='2d'):
+        super().__init__(channels, reduction, k, conv_type)
+        self.fc2 = nn.Linear(channels // reduction, 2*k*channels)
+
+    def forward(self, x):
+        assert x.shape[1] == self.channels
+        theta = self.get_relu_coefs(x)
+
+        relu_coefs = theta.view(-1, self.channels, 2*self.k) * self.lambdas + self.init_v
+
+        if self.conv_type == '1d':
+            # BxCxL -> LxBxCx1
+            x_perm = x.permute(2, 0, 1).unsqueeze(-1)
+            output = x_perm * relu_coefs[:, :, :self.k] + relu_coefs[:, :, self.k:]
+            # LxBxCx2 -> BxCxL
+            result = torch.max(output, dim=-1)[0].permute(1, 2, 0)
+
+        elif self.conv_type == '2d':
+            # BxCxHxW -> HxWxBxCx1
+            x_perm = x.permute(2, 3, 0, 1).unsqueeze(-1)
+            output = x_perm * relu_coefs[:, :, :self.k] + relu_coefs[:, :, self.k:]
+            # HxWxBxCx2 -> BxCxHxW
+            result = torch.max(output, dim=-1)[0].permute(2, 3, 0, 1)
+
+        return result
+
+

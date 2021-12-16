@@ -88,6 +88,15 @@ class Ensemble(nn.ModuleList):
 
 
 def attempt_load(weights, map_location=None, inplace=True, fuse=True):
+    # 这个函数用于加载模型权重文件并构建模型（可以构造普通模型或者集成模型）。被广泛用于val.py、detect.py、train.py等文件中，用在测试、验证阶段。
+    """用在val.py、detect.py、train.py等文件中.
+     一般用在测试、验证阶段加载模型权重文件并构建模型（可以构造普通模型或者集成模型）
+    Loads an ensemble of models weights=[a,b,c] or a single model weights=[a] or weights=a
+        :params weights: 模型的权重文件地址 默认weights/yolov5s.pt
+                         可以是[a]也可以是list格式[a, b]  如果是list格式将调用上面的模型集成函数 多模型运算 提高最终模型的泛化误差
+        :params map_location: attempt_download函数参数  表示模型运行设备device
+        :params inplace: pytorch 1.7.0 compatibility设置
+    """
     from models.yolo import Detect, Model
 
     # Loads an ensemble of models weights=[a,b,c] or a single model weights=[a] or weights=a

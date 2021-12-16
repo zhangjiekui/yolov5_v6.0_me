@@ -109,8 +109,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     nc = 1 if single_cls else int(data_dict['nc'])  # number of classes
     names = ['item'] if single_cls and len(data_dict['names']) != 1 else data_dict['names']  # class names
     assert len(names) == nc, f'{len(names)} names found for nc={nc} dataset in {data}'  # check
-    is_coco = isinstance(val_path, str) and val_path.endswith('coco/val2017.txt')  # COCO dataset
-
+    # is_coco = isinstance(val_path, str) and val_path.endswith('coco/val2017.txt')  # COCO dataset
+    is_coco = isinstance(val_path, str) and 'coco' in val_path  # COCO dataset。考虑了cocc128的情况
     # Model
     check_suffix(weights, '.pt')  # check weights
     pretrained = weights.endswith('.pt')
@@ -131,13 +131,13 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     test_fucs(model)
 
     # Freeze
-    freeze = [f'model.{x}.' for x in range(freeze)]  # layers to freeze
-    for k, v in model.named_parameters():
-        v.requires_grad = True  # train all layers
-        if any(x in k for x in freeze):
-            LOGGER.info(f'freezing {k}')
-            v.requires_grad = False
-
+    if freeze > 0: # todo ,如果freeze==0，没必要执行下面的内容。
+        freeze = [f'model.{x}.' for x in range(freeze)]  # layers to freeze
+        for k, v in model.named_parameters():
+            v.requires_grad = True  # train all layers
+            if any(x in k for x in freeze):
+                LOGGER.info(f'freezing {k}')
+                v.requires_grad = False
     # Image size
     gs = max(int(model.stride.max()), 32)  # grid size (max stride)
     imgsz = check_img_size(opt.imgsz, gs, floor=gs * 2)  # verify imgsz is gs-multiple
@@ -145,6 +145,7 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     # Batch size
     if RANK == -1 and batch_size == -1:  # single-GPU only, estimate best batch size
         batch_size = check_train_batch_size(model, imgsz)
+        batch_size = (batch_size // 8) * 8 #todo 调整为8的倍数  [如果放到上面的函数check_train_batch_size里，会报错，暂时放这了]
 
     # Optimizer
     nbs = 64  # nominal batch size
@@ -471,7 +472,7 @@ def parse_opt(known=False):
     # parser.add_argument('--data', type=str, default=ROOT / 'data/coco_me.yaml', help='dataset.yaml path')
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
     parser.add_argument('--hyp', type=str, default=ROOT / 'data/hyps/hyp.scratch.yaml', help='hyperparameters path')
-    parser.add_argument('--epochs', type=int, default=300)
+    parser.add_argument('--epochs', type=int, default=3) #todo 300
     parser.add_argument('--batch-size', type=int, default=-1, help='total batch size for all GPUs, -1 for autobatch')
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=640, help='train, val image size (pixels)')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
@@ -479,6 +480,7 @@ def parse_opt(known=False):
     parser.add_argument('--nosave', action='store_true', help='only save final checkpoint')
     parser.add_argument('--noval', action='store_true', help='only validate final epoch')
     parser.add_argument('--noautoanchor', action='store_true', help='disable autoanchor check')
+    # --evolve 300
     parser.add_argument('--evolve', type=int, nargs='?', const=300, help='evolve hyperparameters for x generations')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache', type=str, nargs='?', const='ram', help='--cache images in "ram" (default) or "disk"')
@@ -623,9 +625,9 @@ def main(opt, callbacks=Callbacks()):
 
             # Constrain to limits
             for k, v in meta.items():
-                hyp[k] = max(hyp[k], v[1])  # lower limit
-                hyp[k] = min(hyp[k], v[2])  # upper limit
-                hyp[k] = round(hyp[k], 5)  # significant digits
+                hyp[k] = max(hyp[k], v[1])  # upper limit
+                hyp[k] = min(hyp[k], v[2])  # lower limit
+                hyp[k] = round(hyp[k], 5)  # significant digits 保留5位小数
 
             # Train mutation
             results = train(hyp.copy(), opt, device, callbacks)

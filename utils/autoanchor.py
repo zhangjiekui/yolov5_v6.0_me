@@ -63,7 +63,7 @@ def check_anchors(dataset, model, thr=4.0, imgsz=640):
         else:
             LOGGER.info(f'{PREFIX}Original anchors better than new anchors. Proceeding with original anchors.')
 
-@WorkingDirectory(r'../datasets/coco128_with_yaml')
+# @WorkingDirectory(r'../datasets/coco128_with_yaml') #todo
 def kmean_anchors(dataset='./data/coco128.yaml', n=9, img_size=640, thr=4.0, gen=1000, verbose=True):
     """ Creates kmeans-evolved anchors from training dataset
 

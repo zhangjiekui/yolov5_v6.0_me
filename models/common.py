@@ -14,7 +14,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pandas as pd
-import requests
+import requests # Http客户端库
 import torch
 import torch.nn as nn
 from PIL import Image
@@ -29,14 +29,24 @@ from utils.torch_utils import copy_attr, time_sync
 
 
 def autopad(k, p=None):  # kernel, padding
-    # Pad to 'same'
+    # 返回p，或者auto-pad to 'same'
     if p is None:
         p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
     return p
 
 
 class Conv(nn.Module):
-    # Standard convolution
+    """
+    Standard convolution -->  conv+BN+act
+    :params c1: 输入的channel值
+    :params c2: 输出的channel值
+    :params k: 卷积的kernel_size
+    :params s: 卷积的stride
+    :params p: 卷积的padding  一般是None  可以通过autopad自行计算需要pad的padding数
+    :params g: 卷积的groups数  =1就是普通的卷积  >1就是深度可分离卷积
+    :params act: 激活函数类型   True就是SiLU(), False就是不使用激活函数, 或者是自己传入的激活函数（继承自nn.Module）
+    """
+
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):  # ch_in, ch_out, kernel, stride, padding, groups
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p), groups=g, bias=False)
@@ -47,6 +57,9 @@ class Conv(nn.Module):
         return self.act(self.bn(self.conv(x)))
 
     def forward_fuse(self, x):
+        """用于Model类的fuse函数
+        融合conv+bn 加速推理，一般用于测试/验证阶段
+        """
         return self.act(self.conv(x))
 
 
@@ -107,7 +120,17 @@ class Bottleneck(nn.Module):
 
 
 class BottleneckCSP(nn.Module):
+    """
     # CSP Bottleneck https://github.com/WongKinYiu/CrossStagePartialNetworks
+    在BottleneckCSP和yolo.py的parse_model中调用
+    Standard bottleneck  Conv+Conv+shortcut
+        :params c1: 第一个卷积的输入channel
+        :params c2: 第二个卷积的输出channel
+        :params n : number. 重复次数，默认为1
+        :params shortcut: bool 是否有shortcut连接 默认是True
+        :params g: 卷积分组的个数  =1就是普通卷积  >1就是深度可分离卷积
+        :params e: expansion ratio  e*c2就是第一个卷积的输出channel=第二个卷积的输入channel
+    """
     def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):  # ch_in, ch_out, number, shortcut, groups, expansion
         super().__init__()
         c_ = int(c2 * e)  # hidden channels
@@ -141,7 +164,10 @@ class C3(nn.Module):
 
 
 class C3TR(C3):
-    # C3 module with TransformerBlock()
+    """
+    C3 module with TransformerBlock()
+    这部分是根据上面的C3结构改编而来的, 将原先的Bottleneck替换为调用TransformerBlock模块
+    """
     def __init__(self, c1, c2, n=1, shortcut=True, g=1, e=0.5):
         super().__init__(c1, c2, n, shortcut, g, e)
         c_ = int(c2 * e)
@@ -199,7 +225,24 @@ class SPPF(nn.Module):
 
 
 class Focus(nn.Module):
-    # Focus wh information into c-space
+
+    """
+    Focus wh information into c-space 把宽度w和高度h的信息整合到c空间中
+    理论：从高分辨率图像中，周期性的抽出像素点重构到低分辨率图像中，即将图像相邻的四个位置进行堆叠，
+         聚焦wh维度信息到c通道空，提高每个点感受野，并减少原始信息的丢失，该模块的设计主要是减少计算量加快速度。
+    在yolo.py的parse_model函数中被调用
+            先做4个slice 再concat 最后再做Conv
+            slice后 (b,c1,w,h) -> 分成4个slice 每个slice(b,c1,w/2,h/2)
+            concat(dim=1)后 4个slice(b,c1,w/2,h/2)) -> (b,4c1,w/2,h/2)
+            conv后 (b,4c1,w/2,h/2) -> (b,c2,w/2,h/2)
+            :params c1: slice后的channel
+            :params c2: Focus最终输出的channel
+            :params k: 最后卷积的kernel
+            :params s: 最后卷积的stride
+            :params p: 最后卷积的padding
+            :params g: 最后卷积的分组情况  =1普通卷积  >1深度可分离卷积
+            :params act: bool激活函数类型  默认True:SiLU()/Swish  False:不用激活函数
+    """
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):  # ch_in, ch_out, kernel, stride, padding, groups
         super().__init__()
         self.conv = Conv(c1 * 4, c2, k, s, p, g, act)
@@ -224,7 +267,9 @@ class GhostConv(nn.Module):
 
 
 class GhostBottleneck(nn.Module):
-    # Ghost Bottleneck https://github.com/huawei-noah/ghostnet
+    """
+    Ghost Bottleneck https://github.com/huawei-noah/ghostnet
+    """
     def __init__(self, c1, c2, k=3, s=1):  # ch_in, ch_out, kernel, stride
         super().__init__()
         c_ = c2 // 2
@@ -458,13 +503,14 @@ class AutoShape(nn.Module):
     @torch.no_grad()
     def forward(self, imgs, size=640, augment=False, profile=False):
         # Inference from various sources. For height=640, width=1280, RGB images example inputs are:
-        #   file:       imgs = 'data/images/zidane.jpg'  # str or PosixPath
-        #   URI:             = 'https://ultralytics.com/images/zidane.jpg'
-        #   OpenCV:          = cv2.imread('image.jpg')[:,:,::-1]  # HWC BGR to RGB x(640,1280,3)
-        #   PIL:             = Image.open('image.jpg') or ImageGrab.grab()  # HWC x(640,1280,3)
-        #   numpy:           = np.zeros((640,1280,3))  # HWC
-        #   torch:           = torch.zeros(16,3,320,640)  # BCHW (scaled to size=640, 0-1 values)
-        #   multiple:        = [Image.open('image1.jpg'), Image.open('image2.jpg'), ...]  # list of images
+        # 这里的imgs针对不同的方法读入
+            #   file:       imgs = 'data/images/zidane.jpg'  # str or PosixPath
+            #   URI:             = 'https://ultralytics.com/images/zidane.jpg'
+            #   OpenCV:          = cv2.imread('image.jpg')[:,:,::-1]  # HWC BGR to RGB x(640,1280,3)
+            #   PIL:             = Image.open('image.jpg') or ImageGrab.grab()  # HWC x(640,1280,3)
+            #   numpy:           = np.zeros((640,1280,3))  # HWC
+            #   torch:           = torch.zeros(16,3,320,640)  # BCHW (scaled to size=640, 0-1 values)
+            #   multiple:        = [Image.open('image1.jpg'), Image.open('image2.jpg'), ...]  # list of images
 
         t = [time_sync()]
         p = next(self.model.parameters())  # for device and type
@@ -614,6 +660,13 @@ class Detections:
 
 class Classify(nn.Module):
     # Classification head, i.e. x(b,c1,20,20) to x(b,c2)
+    """
+        这是一个二级分类模块, 什么是二级分类模块? 比如做车牌的识别, 先识别出车牌, 如果想对车牌上的字进行识别, 就需要二级分类进一步检测.
+        如果对模型输出的分类再进行分类, 就可以用这个模块. 不过这里这个类写的比较简单, 若进行复杂的二级分类, 可以根据自己的实际任务可以改写, 这里代码不唯一.
+        Classification head, i.e. x(b,c1,20,20) to x(b,c2)
+        用于第二级分类   可以根据自己的任务自己改写，比较简单
+        比如车牌识别 检测到车牌之后还需要检测车牌在哪里，如果检测到侧拍后还想对车牌上的字再做识别的话就要进行二级分类
+    """
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1):  # ch_in, ch_out, kernel, stride, padding, groups
         super().__init__()
         self.aap = nn.AdaptiveAvgPool2d(1)  # to x(b,c1,1,1)

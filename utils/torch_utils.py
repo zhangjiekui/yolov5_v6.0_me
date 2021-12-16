@@ -325,7 +325,7 @@ def prune(model, amount=0.3):
             # print("    l1_unstructured:",m.state_dict().keys())
             prune.remove(m, 'weight')  # make permanent
             # print("    remove:",m.state_dict().keys())
-    print('after pruned %.3g global sparsity' % sparsity(model))
+    print('             ...after pruned %.3g global sparsity' % sparsity(model))
 
 # to be done
 def fuse_conv_and_bn(conv, bn):
